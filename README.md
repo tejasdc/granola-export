@@ -66,7 +66,7 @@ The export recovers from any failure state:
 
 - **Missed runs**: Next run catches up automatically — no data lost
 - **Deleted files**: Re-exports if a file was removed from disk
-- **No transcript yet**: Re-checks on every run until the transcript appears
+- **No transcript yet**: Re-checks meetings within the last 10 days on each run
 - **API down**: Notes still export from cache; transcripts retry next run
 - **Expired token**: Detected and skipped (Granola desktop app refreshes tokens)
 - **Concurrent runs**: Atomic lock file prevents conflicts

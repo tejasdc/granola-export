@@ -5,7 +5,7 @@ Automated backup of Granola meeting notes and transcripts to local markdown file
 ## Quick Start
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/tejasdc/granola-export.git
 cd granola-export
 ./setup.sh
 ```
@@ -23,8 +23,8 @@ Auth tokens are extracted from `supabase.json` — tries WorkOS tokens first (ne
 
 The export tracks state in `notes/.export-state.json`:
 - Skips unchanged meetings where the file still exists on disk
-- Re-checks meetings that previously had no transcript
-- Re-exports if a file was deleted
+- Only fetches transcripts from the API for meetings within the last 10 days (Granola processes transcripts shortly after meetings, so older ones won't gain new transcripts)
+- Re-exports if a file was deleted from disk
 
 ## Usage
 
