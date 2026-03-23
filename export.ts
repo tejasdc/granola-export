@@ -304,12 +304,12 @@ async function runExport(outputDir: string, stateFile: string, force: boolean) {
     const prev = exportState.exported[doc.id];
     const isUnchanged = prev && prev.updatedAt === updatedAt;
 
-    // Verify the file still exists on disk before skipping
+    // Skip if unchanged and file exists on disk
     const fileExists = prev?.filename
       ? existsSync(join(outputDir, prev.filename))
       : false;
 
-    if (isUnchanged && prev.hasTranscript && fileExists) {
+    if (isUnchanged && fileExists) {
       skippedCount++;
       usedFilenames.add(prev.filename);
       continue;
@@ -322,8 +322,13 @@ async function runExport(outputDir: string, stateFile: string, force: boolean) {
     const attendees = getAttendees(doc);
     const notes = doc.notes_markdown || doc.notes_plain || "";
 
+    // Fetch transcript: cache first, then API (only for meetings within 10 days)
     let transcriptSegments = cachedTranscripts[doc.id] || [];
-    if (!transcriptSegments.length && token && !authExpired) {
+    const meetingDate = new Date(doc.google_calendar_event?.start?.dateTime || doc.created_at || 0);
+    const daysSinceMeeting = (Date.now() - meetingDate.getTime()) / (1000 * 60 * 60 * 24);
+    const withinTranscriptWindow = daysSinceMeeting <= 10;
+
+    if (!transcriptSegments.length && token && !authExpired && withinTranscriptWindow) {
       const result = await fetchTranscript(token, doc.id);
       if (result.error === "auth_expired") {
         console.warn("  Warning: API token expired — transcript API disabled for this run");
