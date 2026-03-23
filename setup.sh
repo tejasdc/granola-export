@@ -5,7 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 EXPORT_SCRIPT="$SCRIPT_DIR/export.ts"
 PLIST_LABEL="com.granola-export.daily"
-PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
+LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
+PLIST_PATH="$LAUNCH_AGENTS_DIR/$PLIST_LABEL.plist"
 
 # Find bun
 BUN_PATH="$(which bun 2>/dev/null || echo "$HOME/.bun/bin/bun")"
@@ -27,15 +28,25 @@ mkdir -p "$SCRIPT_DIR/notes"
 
 # Run initial export
 echo "Running initial export..."
-"$BUN_PATH" run "$EXPORT_SCRIPT" || {
-  echo "Warning: initial export had errors (see above)"
+if ! "$BUN_PATH" run "$EXPORT_SCRIPT"; then
+  echo ""
+  echo "Error: initial export failed. Fix the issues above before installing the scheduled job."
+  exit 1
+fi
+
+# XML-escape paths for plist (handles &, <, > in directory names)
+xml_escape() {
+  echo "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'
 }
+
+BUN_XML="$(xml_escape "$BUN_PATH")"
+SCRIPT_XML="$(xml_escape "$EXPORT_SCRIPT")"
 
 # Install launchd job
 echo ""
 echo "Installing daily export job..."
 
-# Unload existing if present
+mkdir -p "$LAUNCH_AGENTS_DIR"
 launchctl unload "$PLIST_PATH" 2>/dev/null || true
 
 cat > "$PLIST_PATH" <<PLIST
@@ -44,12 +55,12 @@ cat > "$PLIST_PATH" <<PLIST
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>$PLIST_LABEL</string>
+    <string>${PLIST_LABEL}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$BUN_PATH</string>
+        <string>${BUN_XML}</string>
         <string>run</string>
-        <string>$EXPORT_SCRIPT</string>
+        <string>${SCRIPT_XML}</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>

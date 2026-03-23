@@ -101,15 +101,28 @@ function saveState(stateFile: string, state: ExportState) {
 // -- Locking --
 
 function acquireLock(lockFile: string): boolean {
-  if (existsSync(lockFile)) {
+  const { openSync, closeSync, fstatSync } = require("node:fs");
+  try {
+    // O_CREAT | O_EXCL is atomic — fails if file already exists
+    const fd = openSync(lockFile, "wx");
+    writeFileSync(fd, `${process.pid}\n${new Date().toISOString()}`);
+    closeSync(fd);
+    return true;
+  } catch (err: any) {
+    if (err.code !== "EEXIST") throw err;
+    // Lock exists — check if stale
     try {
-      const lockAge = Date.now() - new Date(readFileSync(lockFile, "utf8")).getTime();
-      if (lockAge < 300_000) return false;
-    } catch {}
-    console.warn("Warning: stale lock file found, removing");
+      const content = readFileSync(lockFile, "utf8");
+      const timestamp = content.split("\n")[1] || content;
+      const lockAge = Date.now() - new Date(timestamp).getTime();
+      if (lockAge < 600_000) return false; // 10 minutes for API-heavy runs
+      console.warn("Warning: stale lock file found (>10min), removing");
+      unlinkSync(lockFile);
+      return acquireLock(lockFile); // retry once
+    } catch {
+      return false;
+    }
   }
-  writeFileSync(lockFile, new Date().toISOString());
-  return true;
 }
 
 function releaseLock(lockFile: string) {
@@ -301,16 +314,6 @@ async function runExport(outputDir: string, stateFile: string, force: boolean) {
     const filename = buildFilename(docDate, title, doc.id, usedFilenames);
     const filepath = join(outputDir, filename);
 
-    if (prev?.filename && prev.filename !== filename) {
-      const oldPath = join(outputDir, prev.filename);
-      try {
-        if (existsSync(oldPath)) {
-          unlinkSync(oldPath);
-          console.log(`  Renamed: ${prev.filename} -> ${filename}`);
-        }
-      } catch {}
-    }
-
     const attendees = getAttendees(doc);
     const notes = doc.notes_markdown || doc.notes_plain || "";
 
@@ -349,8 +352,15 @@ async function runExport(outputDir: string, stateFile: string, force: boolean) {
     if (notes) md += `## Notes\n\n${notes}\n\n`;
     if (transcriptSegments.length) md += `## Transcript\n\n${formatTranscript(transcriptSegments)}\n`;
 
+    // Write new file first, THEN remove old one (prevents data loss on crash)
     writeFileSync(filepath, md);
     exportState.exported[doc.id] = { updatedAt, hasTranscript: transcriptSegments.length > 0, filename };
+
+    if (prev?.filename && prev.filename !== filename) {
+      const oldPath = join(outputDir, prev.filename);
+      try { if (existsSync(oldPath)) unlinkSync(oldPath); } catch {}
+      console.log(`  Renamed: ${prev.filename} -> ${filename}`);
+    }
 
     console.log(`  ${isUpdate ? "Updated" : "Exported"}: ${filename} (${transcriptSegments.length} transcript segments)`);
     if (isUpdate) updatedCount++;
