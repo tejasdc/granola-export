@@ -1,62 +1,53 @@
-# Granola Backup
+# granola-export
 
-Automated backup of Granola meeting notes to local markdown files.
+Automated backup of Granola meeting notes and transcripts to local markdown files.
 
-## Structure
+## Quick Start
 
-```
-granola-backup/
-├── CLAUDE.md          # This file
-├── export.ts          # Export script (Bun)
-└── notes/             # Exported meeting notes
-    ├── .export-state.json  # Tracks what's been exported
-    └── YYYY-MM-DD - Title.md
+```bash
+git clone <repo-url>
+cd granola-export
+./setup.sh
 ```
 
-## Why This Exists
-
-Granola's free plan only keeps notes accessible for ~30 days. This exports all meeting notes, metadata, and transcripts as markdown files so they persist locally forever.
+`setup.sh` runs the initial export and installs a daily launchd job (10pm).
 
 ## How It Works
 
-`export.ts` reads Granola's local cache file (`~/Library/Application Support/Granola/cache-v6.json`). This is the single source of truth — the desktop app writes it, we read it. For transcripts not in the cache, the script falls back to Granola's API using the auth token from `~/Library/Application Support/Granola/supabase.json`.
+1. Reads meeting metadata from Granola's local cache (`cache-v6.json` or earlier)
+2. Fetches full transcripts from Granola's API (`/v1/get-document-transcript`)
+3. Writes one markdown file per meeting to `notes/`
+4. Tracks export state in `notes/.export-state.json` for incremental updates
+5. Re-checks meetings that previously had no transcript available
 
-The script is incremental: `.export-state.json` tracks each document's `updated_at` timestamp. Only new or modified meetings get re-exported.
+The local cache rarely contains transcripts — the API is the primary transcript source. Auth tokens are extracted from Granola's `supabase.json` (WorkOS or Cognito format).
 
-## Automated Schedule
-
-A launchd agent runs the export daily at 10pm:
-- Plist: `~/Library/LaunchAgents/com.tejas.granola-export.plist`
-- Log: `/tmp/granola-export.log`
-
-## Commands
+## Usage
 
 ```bash
-# Run export manually
-bun run ~/workspace/granola-backup/export.ts
-
-# Check launchd status
-launchctl list | grep granola
-
-# View last run log
-cat /tmp/granola-export.log
+bun run export.ts                     # export to ./notes/
+bun run export.ts --output ~/backup   # export to custom directory
+bun run export.ts --force             # re-export everything
 ```
 
-## Granola CLI (separate tool)
+## File Structure
 
-`granola` binary is installed globally for interactive queries:
+- `export.ts` — the exporter (single file, no dependencies beyond Bun)
+- `setup.sh` — installs launchd job and runs initial export
+- `notes/` — exported markdown files (gitignored)
+- `CLAUDE.md` — this file
 
-```bash
-granola list              # Recent meetings
-granola search "topic"    # Search by keyword
-granola show <id>         # Full meeting details
-granola transcript <id>   # Meeting transcript
-granola sync              # Refresh from API
-```
+## Requirements
 
-Note: We patched the CLI source at `/tmp/granola-cli/` to support cache-v6.json. Rebuild with: `cd /tmp/granola-cli && bun build ./src/cli.ts --compile --outfile /usr/local/bin/granola`
+- macOS (Linux paths supported but launchd is macOS-only)
+- [Bun](https://bun.sh) runtime
+- Granola desktop app installed and logged in
 
-## Dependencies
+## Platform Support
 
-- Bun runtime (`~/.bun/bin/bun`)
-- Granola desktop app (installed and logged in)
+Cache and auth paths are detected per-platform:
+- macOS: `~/Library/Application Support/Granola/`
+- Linux: `~/.config/Granola/`
+- Windows: `~/AppData/Roaming/Granola/`
+
+Cache versions v3 through v6 are auto-detected.
