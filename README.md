@@ -15,24 +15,28 @@ cd granola-export
 ./setup.sh
 ```
 
-`setup.sh` runs the initial export and installs a daily launchd job at 10pm.
+`setup.sh` runs the initial export and installs a daily launchd job (10pm). After that, exports happen automatically — you don't need to run anything manually.
 
-## Usage
+## Manual Usage (optional)
+
+You shouldn't need these for normal use. The daily automation handles everything. These are for troubleshooting or one-off situations:
 
 ```bash
-bun run export.ts                     # export to ./notes/
-bun run export.ts --output ~/backup   # export to custom directory
-bun run export.ts --force             # re-export everything
+bun run export.ts                     # run export manually (same as what the daily job does)
+bun run export.ts --output ~/backup   # export to a different directory
+bun run export.ts --force             # re-export everything from scratch
 ```
 
 ## How It Works
 
-1. Reads meeting metadata from Granola's local cache file
-2. Fetches full transcripts from Granola's API (the cache rarely has them)
-3. Writes one markdown file per meeting with metadata, notes, and transcript
-4. Tracks state for incremental updates — only re-exports new or changed meetings
-5. Re-checks meetings that previously had no transcript
-6. Validates files on disk — re-exports if a file is missing or corrupted
+Granola's API is limited — it doesn't expose meeting metadata, notes, or attendees. The only reliable API endpoint is `/v1/get-document-transcript` for raw transcripts. Everything else lives in Granola's local cache file on your machine.
+
+So the export combines both sources:
+
+1. **Local cache** → meeting list, titles, dates, attendees, notes
+2. **Granola API** → full transcripts (the cache rarely has these)
+
+The result is one markdown file per meeting with all available data.
 
 Each exported file looks like:
 
@@ -48,7 +52,7 @@ Each exported file looks like:
 
 ## Notes
 
-[Meeting notes content]
+[AI-generated meeting notes]
 
 ## Transcript
 
@@ -58,15 +62,15 @@ Each exported file looks like:
 
 ## Resilience
 
-The export is designed to recover from failures:
+The export recovers from any failure state:
 
-- **Missed runs**: Next run catches up automatically
-- **Missing files**: Re-exports if a file was deleted or is suspiciously small
-- **No transcript yet**: Re-checks on every run until transcript is available
-- **API failures**: Notes still export; transcripts retry next run
-- **Expired token**: Detected and skipped gracefully (Granola app refreshes it)
+- **Missed runs**: Next run catches up automatically — no data lost
+- **Deleted files**: Re-exports if a file was removed from disk
+- **No transcript yet**: Re-checks on every run until the transcript appears
+- **API down**: Notes still export from cache; transcripts retry next run
+- **Expired token**: Detected and skipped (Granola desktop app refreshes tokens)
 - **Concurrent runs**: Atomic lock file prevents conflicts
-- **Crash safety**: New files written before old ones deleted; state saved atomically via temp+rename
+- **Crash mid-export**: New files written before old ones deleted; state saved atomically
 
 ## Requirements
 
@@ -82,6 +86,10 @@ If you're an AI agent setting this up for a user:
 2. Run `./setup.sh` — it handles everything (initial export + launchd install)
 3. The `notes/` directory is gitignored — it contains the user's private meeting data
 4. See `CLAUDE.md` for technical details on cache format and API behavior
+
+## Credits
+
+Inspired by [granola-cli](https://github.com/aaronvanston/granola-cli) by [Aaron Vanston](https://github.com/aaronvanston), which figured out how to extract auth tokens from Granola's local storage and call the transcript API.
 
 ## License
 

@@ -304,22 +304,12 @@ async function runExport(outputDir: string, stateFile: string, force: boolean) {
     const prev = exportState.exported[doc.id];
     const isUnchanged = prev && prev.updatedAt === updatedAt;
 
-    // Validate file on disk even if state says it's exported
-    let fileValid = false;
-    if (prev?.filename) {
-      const prevPath = join(outputDir, prev.filename);
-      try {
-        const { statSync } = require("node:fs");
-        const stat = statSync(prevPath);
-        // A real export with transcript should be >500 bytes; without, >150 bytes
-        const minSize = prev.hasTranscript ? 500 : 150;
-        fileValid = stat.size >= minSize;
-      } catch {
-        fileValid = false; // file missing or unreadable
-      }
-    }
+    // Verify the file still exists on disk before skipping
+    const fileExists = prev?.filename
+      ? existsSync(join(outputDir, prev.filename))
+      : false;
 
-    if (isUnchanged && prev.hasTranscript && fileValid) {
+    if (isUnchanged && prev.hasTranscript && fileExists) {
       skippedCount++;
       usedFilenames.add(prev.filename);
       continue;

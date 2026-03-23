@@ -14,13 +14,17 @@ cd granola-export
 
 ## How It Works
 
-1. Reads meeting metadata from Granola's local cache (`cache-v6.json` or earlier)
-2. Fetches full transcripts from Granola's API (`/v1/get-document-transcript`)
-3. Writes one markdown file per meeting to `notes/`
-4. Tracks export state in `notes/.export-state.json` for incremental updates
-5. Re-checks meetings that previously had no transcript available
+Two data sources, each providing what the other lacks:
 
-The local cache rarely contains transcripts — the API is the primary transcript source. Auth tokens are extracted from Granola's `supabase.json` (WorkOS or Cognito format).
+- **Local cache** (`cache-v6.json` or earlier) → meeting list, titles, dates, attendees, notes. The API doesn't expose this metadata reliably (`/v2/get-documents` rejects non-Granola clients, `/v1/get-document-metadata` only returns creator/attendees).
+- **Granola API** (`/v1/get-document-transcript`) → full transcripts. The cache rarely has these (only 1 of 35 meetings in testing).
+
+Auth tokens are extracted from `supabase.json` — tries WorkOS tokens first (new auth), falls back to Cognito (legacy). Both are serialized JSON strings inside the file.
+
+The export tracks state in `notes/.export-state.json`:
+- Skips unchanged meetings where the file still exists on disk
+- Re-checks meetings that previously had no transcript
+- Re-exports if a file was deleted
 
 ## Usage
 
