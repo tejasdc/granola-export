@@ -259,26 +259,26 @@ async function runExport(outputDir: string, stateFile: string, force: boolean) {
   const cachePath = getGranolaCachePath();
 
   if (!existsSync(cachePath)) {
-    console.error(`Granola cache not found at ${cachePath}`);
-    console.error("Is Granola installed and logged in?");
-    process.exit(1);
+    throw new Error(`Granola plaintext cache not found at ${cachePath}. This exporter cannot read Granola's encrypted storage; the backup did not run.`);
   }
 
   let raw: any;
   try {
     raw = JSON.parse(readFileSync(cachePath, "utf8"));
   } catch (err) {
-    console.error("Failed to parse Granola cache:", (err as Error).message);
-    process.exit(1);
+    throw new Error(`Failed to parse Granola cache at ${cachePath}: ${(err as Error).message}`);
   }
 
   const cache = typeof raw.cache === "string" ? JSON.parse(raw.cache) : raw.cache;
   if (!cache?.state) {
-    console.error("Unexpected cache format — missing state object");
-    process.exit(1);
+    throw new Error(`Unexpected Granola cache format at ${cachePath}: missing state object`);
   }
 
-  const documents = Object.values(cache.state.documents || {}) as any[];
+  if (!cache.state.documents || typeof cache.state.documents !== "object") {
+    throw new Error(`Granola cache at ${cachePath} has no documents collection (version ${cache.version ?? "unknown"}). Granola may have moved meeting storage; the backup needs a supported source.`);
+  }
+
+  const documents = Object.values(cache.state.documents) as any[];
   const cachedTranscripts = cache.state.transcripts || {};
 
   const token = extractToken();
@@ -293,6 +293,10 @@ async function runExport(outputDir: string, stateFile: string, force: boolean) {
     .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
   console.log(`Found ${meetings.length} meetings (cache: ${cachePath})`);
+
+  if (meetings.length === 0) {
+    throw new Error(`Granola returned zero meetings from ${cachePath}; refusing to mark the backup successful. Check Granola's current storage and sign-in before the next run.`);
+  }
 
   const usedFilenames = new Set<string>();
 

@@ -1,6 +1,8 @@
 # granola-export
 
-Export your [Granola](https://granola.ai) meeting notes and transcripts to local markdown files. Runs daily via launchd so you always have a local backup.
+Export your [Granola](https://granola.ai) meeting notes and transcripts to local markdown files. A daily launchd job runs the exporter.
+
+**Current status (October 2026):** Granola moved its notes from the plaintext cache this exporter reads into encrypted local storage. The exporter now exits with an error when that cache is absent, has no document collection, or reports zero meetings. Until a supported source is connected and a live export succeeds, the daily job is a failure signal, not a current backup.
 
 ## Why
 
@@ -27,11 +29,11 @@ bun run export.ts --output ~/backup   # export to a different directory
 bun run export.ts --force             # re-export everything from scratch
 ```
 
-## How It Works
+## Original Design
 
-Granola's API is limited — it doesn't expose meeting metadata, notes, or attendees. The only reliable API endpoint is `/v1/get-document-transcript` for raw transcripts. Everything else lives in Granola's local cache file on your machine.
+The original exporter combined Granola's former plaintext cache with its transcript API. This source is no longer current; see the status above.
 
-So the export combines both sources:
+The original export combined both sources:
 
 1. **Local cache** → meeting list, titles, dates, attendees, notes
 2. **Granola API** → full transcripts (the cache rarely has these)
@@ -60,7 +62,7 @@ Each exported file looks like:
 **Them** [02:30:20 PM]: Sure, I think we should...
 ```
 
-## Resilience
+## Original Recovery Behavior
 
 The export recovers from any failure state:
 
