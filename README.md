@@ -19,6 +19,30 @@ cd granola-export
 
 `setup.sh` runs the initial export and installs a daily launchd job (10pm). After that, exports happen automatically — you don't need to run anything manually.
 
+### Run evidence
+
+Every exporter process that reaches its normal exit writes its latest attempt to
+`~/.local/state/recurring-jobs/runs/com.granola-export.daily.json`, including failed
+exports. This is the shared recurring-jobs schema: actual start/end Unix timestamps,
+monotonic duration in seconds, and the process exit code. CPU and peak memory are
+unmeasured and omitted, so the Mac collector reports them as unknown. The receipt
+contains no meeting content or credentials, replaces the previous attempt atomically,
+and is readable only by this user. A receipt write failure is logged without changing
+the export's exit code. Forced termination or failure before the exporter starts
+cannot produce a completion receipt; an older receipt is not proof of a new run.
+
+Recording happens inside the existing Bun process to preserve its launch identity.
+The daily 10pm calendar and wake behavior are unchanged. To deploy an update to an
+already installed job, fast-forward the checkout named in its LaunchAgent; no reinstall
+or initial successful export is needed. `setup.sh` remains the first-install path and
+still refuses installation when the initial export fails. Inspect the receipt beside
+`launchctl print gui/$(id -u)/com.granola-export.daily` and
+`/tmp/granola-export.log`; a fresh receipt with exit code 1 confirms an attempted,
+failed backup, not restored access to Granola.
+
+Run `bun test run-receipt.test.ts` to exercise the exporter in isolated temporary
+homes: missing-cache failure, a fixture export, and unavailable receipt storage.
+
 ## Manual Usage (optional)
 
 You shouldn't need these for normal use. The daily automation handles everything. These are for troubleshooting or one-off situations:

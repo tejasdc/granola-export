@@ -15,6 +15,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { homedir, platform } from "node:os";
+import { recordRunOnExit } from "./run-receipt";
+
+recordRunOnExit();
 
 const API_BASE = "https://api.granola.ai";
 
